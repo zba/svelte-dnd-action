@@ -25,7 +25,7 @@ let shadowElDropZone;
 let dragStartMousePosition;
 let currentMousePosition;
 let isWorkingOnPreviousDrag = false;
-
+let currentZonePrevented;
 // a map from type to a set of drop-zones
 let typeToDropZones = new Map();
 // important - this is needed because otherwise the config that would be used for everyone is the config of the element that created the event listeners
@@ -38,7 +38,7 @@ function registerDropZone(dropZoneEl, type) {
         typeToDropZones.set(type, new Set());
     }
     if (!typeToDropZones.get(type).has(dropZoneEl)) {
-        typeToDropZones.get(type).add(dropZoneEl); 
+        typeToDropZones.get(type).add(dropZoneEl);
     }
 }
 function unregisterDropZone(dropZoneEl, type) {
@@ -76,19 +76,28 @@ function unWatchDraggedElement() {
 
 /* custom drag-events handlers */
 function handleDraggedEntered(e) {
+    if (currentZonePrevented) {
+        return;
+    }
     console.debug('dragged entered', e.currentTarget, e.detail);
     let {items} = dzToConfig.get(e.currentTarget);
     // this deals with another svelte related race condition. in rare occasions (super rapid operations) the list hasn't updated yet
     items = items.filter(i => i.id !== shadowElData.id)
     console.debug(`dragged entered items ${JSON.stringify(items)}`);
+    const event = dispatchConsiderEvent(e.currentTarget, items);
+    if (event.defaultPrevented) {
+        console.debug('preventedDefault');
+        currentZonePrevented = true;
+        return false;
+    }
+    console.log('!!!!!!!!!!!!!', event);
     const {index, isProximityBased} = e.detail.indexObj;
     shadowElIdx = (isProximityBased && index === e.currentTarget.children.length - 1)? index + 1 : index;
     shadowElDropZone = e.currentTarget;
     items.splice( shadowElIdx, 0, shadowElData);
-    dispatchConsiderEvent(e.currentTarget, items);
 }
 function handleDraggedLeft(e) {
-    console.debug('dragged left', e.currentTarget, e.detail);
+    console.debug('dragged left', currentZonePrevented, e.currentTarget, e.detail);
     const {items} = dzToConfig.get(e.currentTarget);
     items.splice(shadowElIdx, 1);
     shadowElIdx = undefined;
@@ -96,13 +105,20 @@ function handleDraggedLeft(e) {
     dispatchConsiderEvent(e.currentTarget, items);
 }
 function handleDraggedIsOverIndex(e) {
+    if (currentZonePrevented) {
+        return;
+    }
     console.debug('dragged is over index', e.currentTarget, e.detail);
     const {items} = dzToConfig.get(e.currentTarget);
     const {index} = e.detail.indexObj;
     items.splice(shadowElIdx, 1);
+    if (event.defaultPrevented) {
+        currentZonePrevented = true;
+        return false;
+    }
+    const event = dispatchConsiderEvent(e.currentTarget, items);
     items.splice( index, 0, shadowElData);
     shadowElIdx = index;
-    dispatchConsiderEvent(e.currentTarget, items);
 }
 
 /* global mouse/touch-events handlers */
@@ -122,7 +138,7 @@ function handleDrop() {
     window.removeEventListener('touchend', handleDrop);
     unWatchDraggedElement();
     moveDraggedElementToWasDroppedState(draggedEl);
-    if (!!shadowElDropZone) { // it was dropped in a drop-zone
+    if (!!shadowElDropZone  && !currentZonePrevented) { // it was dropped in a drop-zone
         console.debug('dropped in dz', shadowElDropZone);
         let {items, type} = dzToConfig.get(shadowElDropZone);
         styleInActiveDropZones(typeToDropZones.get(type));
@@ -172,6 +188,7 @@ function animateDraggedToFinalPosition(callback) {
 function cleanupPostDrop() {
     draggedEl.remove();
     draggedEl = undefined;
+    currentZonePrevented = false;
     draggedElData = undefined;
     draggedElType = undefined;
     originDropZone = undefined;
@@ -283,7 +300,7 @@ export function dndzone(node, options) {
         config.type = newType;
         registerDropZone(node, newType);
 
-        config.items = opts.items || []; 
+        config.items = opts.items || [];
         dzToConfig.set(node, config);
         for (let idx=0; idx< node.children.length; idx++) {
             const draggableEl = node.children[idx];

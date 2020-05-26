@@ -3,15 +3,21 @@ const FINALIZE_EVENT_NAME = 'finalize';
 const CONSIDER_EVENT_NAME = 'consider';
 
 export function dispatchFinalizeEvent(el, items) {
-    el.dispatchEvent(new CustomEvent(FINALIZE_EVENT_NAME, {
-        detail: {items}
-    }));
+  const event = new CustomEvent(FINALIZE_EVENT_NAME, {
+    cancelable: true,
+    detail: { items }
+  });
+  el.dispatchEvent(event);
+  return event;
 }
 
 export function dispatchConsiderEvent(el, items) {
-    el.dispatchEvent(new CustomEvent(CONSIDER_EVENT_NAME, {
-        detail: {items}
-    }));
+  const event = new CustomEvent(CONSIDER_EVENT_NAME, {
+    cancelable: true,
+    detail: { items }
+  });
+  el.dispatchEvent(event);
+  return event;
 }
 
 // internal events
